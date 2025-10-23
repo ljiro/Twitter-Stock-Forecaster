@@ -7,7 +7,7 @@ set TOTAL_WEEKS=37
 REM Start from week index 5 (which is week 6 in human terms)
 for /L %%i in (0,1,%TOTAL_WEEKS%) do (
     echo Running week %%i...
-    python headless_v2.py %%i
+    python D:\Github\Twitter-Stock-Forecaster\src\data_collection\headless_v2.py %%i
 
     REM wait 10 seconds between runs to let Chrome close cleanly
     timeout /t 10 /nobreak >nul

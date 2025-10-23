@@ -8,3 +8,7 @@ PASSWORD=*insert*
 2. Change the directory of dotenv_path in headless_v2.py to point at your .env file
 3. Change the observer.bat python / to point to your directory
 4. Run observer.bat as administrator
+
+Note: 
+if none of the instructions above work, move your .env file to the
+directory of your python that is currently on environment variables/system variables
