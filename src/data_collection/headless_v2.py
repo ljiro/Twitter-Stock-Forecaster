@@ -32,7 +32,7 @@ date_ranges = generate_weekly_ranges("2025-01-01", "2025-09-17")
 # -------------------------
 # 3. Keywords
 # -------------------------
-keywords = ['"Trump" OR "Donald Trump" OR "Trump administration" OR "Trump executive order"']
+keywords = ['"Pfizer" OR "Pfizer drug" OR "pfizer" OR "pfizer vaccine"']
 
 # -------------------------
 # 4. Scrape one week only
@@ -41,7 +41,7 @@ def scrape_one_week(week_index):
     start, end = date_ranges[week_index]
     scweet = Scweet(cookies_path="cookies", disable_images=True, headless=False)
 
-    csv_name = f"trump_week{week_index+1}_{start}_to_{end}.csv"
+    csv_name = f"pfizer_week{week_index+1}_{start}_to_{end}.csv"
     print(f"\n🚀 Scraping Week {week_index+1}: {start} → {end} ...")
 
     tweets = scweet.scrape(
