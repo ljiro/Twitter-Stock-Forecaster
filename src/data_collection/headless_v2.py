@@ -1,5 +1,4 @@
-
-from dotenv import load_dotenv                            
+from dotenv import load_dotenv
 import os
 from Scweet.scweet import Scweet
 import pandas as pd
@@ -9,7 +8,8 @@ from datetime import datetime, timedelta
 # -------------------------
 # 1. Setup
 # -------------------------
-dotenv_path = '/path/.env'
+# Make sure this path is correct or remove it to search in the current directory
+dotenv_path = '/path/.env' 
 load_dotenv(dotenv_path)
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("cookies", exist_ok=True)
@@ -39,11 +39,14 @@ keywords = ['"Pfizer" OR "Pfizer drug" OR "pfizer" OR "pfizer vaccine"']
 # -------------------------
 def scrape_one_week(week_index):
     start, end = date_ranges[week_index]
+    
+    # MODIFICATION 1: Set headless=True here during initialization
     scweet = Scweet(cookies_path="cookies", disable_images=True, headless=False)
 
     csv_name = f"pfizer_week{week_index+1}_{start}_to_{end}.csv"
     print(f"\n🚀 Scraping Week {week_index+1}: {start} → {end} ...")
 
+    # MODIFICATION 2: Removed the 'headless' argument from this function call
     tweets = scweet.scrape(
         since=start,
         until=end,
@@ -51,7 +54,6 @@ def scrape_one_week(week_index):
         lang="en",
         limit=5000,
         save_dir="outputs",
-        headless=True,
         custom_csv_name=csv_name
     )
 
