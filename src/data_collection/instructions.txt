@@ -1,0 +1,4 @@
+Instructions
+1. Populate the .env file with your credentials
+2. Change the directory of dotenv_path in headless_v2.py to point at your .env file
+3. Run observer.bat as administrator
