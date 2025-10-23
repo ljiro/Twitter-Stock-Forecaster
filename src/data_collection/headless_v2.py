@@ -1,5 +1,5 @@
 
-                             
+from dotenv import load_dotenv                            
 import os
 from Scweet.scweet import Scweet
 import pandas as pd
@@ -51,6 +51,7 @@ def scrape_one_week(week_index):
         lang="en",
         limit=5000,
         save_dir="outputs",
+        headless=True,
         custom_csv_name=csv_name
     )
 
