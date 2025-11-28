@@ -4,8 +4,10 @@ pandas
 numpy
 scikit-learn
 yfinance
-vaderSentiment
 apscheduler
 pyvirtualdisplay
 python-dotenv
 joblib
+torch --index-url https://download.pytorch.org/whl/cpu  # Use CPU version to save space
+transformers
+numpy
