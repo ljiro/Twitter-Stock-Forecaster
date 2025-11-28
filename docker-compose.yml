@@ -3,15 +3,8 @@ services:
     build: .
     container_name: nvda_predictor
     restart: always
-    # Critical: shared memory for Chrome to run without crashing
-    shm_size: '2gb' 
+    shm_size: '2gb'  # <--- DO NOT REMOVE THIS
     volumes:
-      # Persist the Database and Models
       - ./data:/app/data
       - ./models:/app/models
-      # Persist Scraper Cookies so you don't get banned
       - ./src/data_collection/cookies:/app/src/data_collection/cookies
-      # Optional: Map outputs if you want to inspect raw CSVs
-      - ./src/data_collection/outputs:/app/src/data_collection/outputs
-    environment:
-      - TZ=UTC
