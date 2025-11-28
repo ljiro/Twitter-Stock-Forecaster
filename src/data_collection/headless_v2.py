@@ -41,7 +41,7 @@ def scrape_one_week(week_index):
     start, end = date_ranges[week_index]
     
     # MODIFICATION 1: Set headless=True here during initialization
-    scweet = Scweet(cookies_path="cookies", disable_images=True, headless=False)
+    scweet = Scweet(cookies_path="cookies", disable_images=True, headless=True)
 
     csv_name = f"pfizer_week{week_index+1}_{start}_to_{end}.csv"
     print(f"\n🚀 Scraping Week {week_index+1}: {start} → {end} ...")
