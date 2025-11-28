@@ -1,6 +1,9 @@
 FROM python:3.10-slim
 
-# 1. Install System Deps (Chromium + Xvfb + Compilation tools)
+# 1. Install System Dependencies
+# chromium & driver: for scraping
+# xvfb: to fake a monitor for headless=False
+# gcc: for compiling python libs
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
@@ -9,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Environment Variables
+# 2. Set Environment Variables
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 ENV DISPLAY=:99 
