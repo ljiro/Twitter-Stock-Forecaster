@@ -5,12 +5,11 @@ import os
 DB_PATH = "data/nvda.db"
 
 def init_db():
-    """Creates the necessary tables if they don't exist"""
+    """Initializes tables for training data and predictions."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # Table 1: Daily Summary (The Training Data)
-    # Stores aggregated sentiment and stock price per day
+    # Table 1: Historical Training Data (One row per day)
     c.execute('''
         CREATE TABLE IF NOT EXISTS daily_summary (
             date TEXT PRIMARY KEY,
@@ -20,38 +19,52 @@ def init_db():
         )
     ''')
     
-    # Table 2: Predictions Log
+    # Table 2: Live Predictions Log (Every 30 mins)
     c.execute('''
         CREATE TABLE IF NOT EXISTS predictions (
             timestamp TEXT,
             current_price REAL,
             sentiment REAL,
             pred_price REAL,
-            pred_lower REAL,
-            pred_upper REAL
+            lower_bound REAL,
+            upper_bound REAL
         )
     ''')
-    
     conn.commit()
     conn.close()
-    print("✅ Database initialized at", DB_PATH)
 
 def save_daily_summary(df):
-    """Saves aggregated data to DB (Upsert: Update if exists, Insert if new)"""
+    """Upserts daily summary data."""
     conn = sqlite3.connect(DB_PATH)
-    # Pandas to_sql doesn't support upsert easily in SQLite, so we use standard SQL
+    # Using raw SQL for UPSERT capability
     for _, row in df.iterrows():
         conn.execute('''
-            INSERT OR REPLACE INTO daily_summary (date, avg_sentiment, close_price, target_price_3d)
+            INSERT INTO daily_summary (date, avg_sentiment, close_price, target_price_3d)
             VALUES (?, ?, ?, ?)
-        ''', (row['date'], row['avg_sentiment'], row['close_price'], row.get('target_price_3d')))
+            ON CONFLICT(date) DO UPDATE SET
+                avg_sentiment=excluded.avg_sentiment,
+                close_price=excluded.close_price,
+                target_price_3d=excluded.target_price_3d
+        ''', (row['date'], row['avg_sentiment'], row['close_price'], row['target_price_3d']))
+    conn.commit()
+    conn.close()
+
+def update_past_target(date_str, actual_price):
+    """
+    Updates the 'target_price_3d' for a record 3 days ago.
+    Example: On Friday, we update Tuesday's row with Friday's price.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('''
+        UPDATE daily_summary 
+        SET target_price_3d = ? 
+        WHERE date = ?
+    ''', (actual_price, date_str))
     conn.commit()
     conn.close()
 
 def load_training_data():
-    """Reads history for the model"""
     conn = sqlite3.connect(DB_PATH)
-    # We only want rows where we actually know the future price (target_price_3d is not null)
     df = pd.read_sql("SELECT * FROM daily_summary WHERE target_price_3d IS NOT NULL", conn)
     conn.close()
     return df
