@@ -1,0 +1,5 @@
+Scweet==1.8
+pandas
+python-dotenv
+pyvirtualdisplay  <-- You must add this
+selenium
