@@ -1,5 +1,11 @@
 Scweet==1.8
-pandas
-python-dotenv
-pyvirtualdisplay  <-- You must add this
 selenium
+pandas
+numpy
+scikit-learn
+yfinance
+vaderSentiment
+apscheduler
+pyvirtualdisplay
+python-dotenv
+joblib

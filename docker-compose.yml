@@ -1,0 +1,16 @@
+services:
+  nvda-pipeline:
+    build: .
+    container_name: nvda_predictor
+    restart: always
+    shm_size: '2gb' # Critical for Selenium
+    volumes:
+      # Data Persistence
+      - ./data:/app/data
+      - ./models:/app/models
+      # Scraper Persistence (Outputs & Cookies)
+      - ./src/data_collection/outputs:/app/src/data_collection/outputs
+      - ./src/data_collection/cookies:/app/src/data_collection/cookies
+    environment:
+      # Pass any API keys here if needed later
+      - ENV=production
