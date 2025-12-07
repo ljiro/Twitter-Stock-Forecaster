@@ -1,19 +1,12 @@
-# --- Scraper ---
-Scweet==1.8
+Scweet
 selenium
-pyvirtualdisplay
-
-# --- Data & scheduling ---
 pandas
 numpy
 yfinance
 apscheduler
+pyvirtualdisplay
 python-dotenv
-
-# --- Machine Learning ---
-scikit-learn
 joblib
-
-# --- Sentiment (FinBERT) ---
+scikit-learn
 transformers
-# torch is installed manually in Dockerfile to force CPU version
+# Torch is installed in Dockerfile to handle CPU versioning
