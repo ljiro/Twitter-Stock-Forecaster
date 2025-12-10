@@ -8,12 +8,15 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-# Imports
+# Imports from your project modules
 from src.data_collection.scraper import run_scraper
 from src.data_preprocessing.processor import get_sentiment, get_current_stock_price
-from src.analysis.model import NvidiaQuantileModel
 from src.database import init_db
 from src.features import prepare_inference_features, add_technical_indicators
+
+# Models (Champion & Rivals)
+from src.analysis.model import NvidiaQuantileModel       # Champion (Gradient Boosting)
+from src.analysis.adapted_rivals import NvidiaLinearQR, NvidiaMQLSTM, NvidiaQRNN_Keras # Rivals
 
 # -------------------------
 # 1. Configuration & Logging
@@ -51,7 +54,7 @@ def regenerate_training_data():
     df['close_price'] = pd.to_numeric(df['close_price'])
     df['avg_sentiment'] = pd.to_numeric(df['avg_sentiment'])
     
-    # Re-Calculate Targets
+    # Re-Calculate Targets (Prices)
     df['target_price_1d'] = df['close_price'].shift(-1)
     df['target_price_3d'] = df['close_price'].shift(-3)
     
@@ -68,7 +71,7 @@ def regenerate_training_data():
 # -------------------------
 def job_inference():
     """
-    Runs every 10 minutes: Scrapes -> Updates DB -> Predicts -> Updates API JSON
+    Runs every 10 minutes: Scrapes -> Updates DB -> Runs ENSEMBLE Prediction -> Updates API
     """
     logger.info("🚀 Starting 10-Minute Inference Cycle...")
     today = datetime.now().strftime("%Y-%m-%d")
@@ -98,21 +101,34 @@ def job_inference():
             conn.close()
             
             if df_feat is not None:
-                # E. Run Models
-                model_1d = NvidiaQuantileModel(target_col='target_price_1d', model_name='model_1d')
-                pred_1d = model_1d.predict(df_feat)
+                # --- E. BATTLE OF THE MODELS (3-Day Horizon) ---
                 
-                model_3d = NvidiaQuantileModel(target_col='target_price_3d', model_name='model_3d')
-                pred_3d = model_3d.predict(df_feat)
+                # 1. Champion: Gradient Boosting
+                champion = NvidiaQuantileModel(target_col='target_price_3d', model_name='model_3d')
+                pred_gb = champion.predict(df_feat)
                 
-                # F. Build API Payload
+                # 2. Rival: Linear QR
+                rival_lin = NvidiaLinearQR(target_col='target_price_3d')
+                pred_lin = rival_lin.predict(df_feat)
+                
+                # 3. Rival: MQLSTM
+                rival_lstm = NvidiaMQLSTM(target_col='target_price_3d')
+                pred_lstm = rival_lstm.predict(df_feat)
+                
+                # 4. Rival: QRNN
+                rival_qrnn = NvidiaQRNN_Keras(target_col='target_price_3d')
+                pred_qrnn = rival_qrnn.predict(df_feat)
+                
+                # F. Build API Payload (Comparison View)
                 api_payload = {
                     "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "current_price": price,
                     "sentiment_score": round(sent, 4),
-                    "forecasts": {
-                        "tomorrow": pred_1d,
-                        "next_3_days": pred_3d
+                    "predictions_3d": {
+                        "champion_gb": pred_gb,
+                        "rival_linear": pred_lin,
+                        "rival_lstm": pred_lstm,
+                        "rival_qrnn": pred_qrnn
                     }
                 }
                 
@@ -120,63 +136,70 @@ def job_inference():
                 with open(JSON_OUTPUT, "w") as f:
                     json.dump(api_payload, f, indent=4)
                     
-                # H. Append to Log
+                # H. Append Champion to CSV Log
                 row = {
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "sentiment": round(sent, 4),
                     "price": price,
-                    "pred_1d_median": pred_1d['pred'] if pred_1d else 0,
-                    "pred_3d_median": pred_3d['pred'] if pred_3d else 0
+                    "champion_median": pred_gb['pred'] if pred_gb else 0,
+                    "linear_median": pred_lin['pred'] if pred_lin else 0,
+                    "lstm_median": pred_lstm['pred'] if pred_lstm else 0,
+                    "qrnn_median": pred_qrnn['pred'] if pred_qrnn else 0
                 }
                 out = pd.DataFrame([row])
                 write_header = not os.path.isfile(PREDICTIONS_CSV)
                 out.to_csv(PREDICTIONS_CSV, mode='a', header=write_header, index=False)
 
-                logger.info(f"✅ Cycle Complete. Next run in 10 mins.")
+                logger.info(f"✅ Inference Complete. JSON updated.")
                 
         except Exception as e:
             logger.error(f"❌ Inference Failed: {e}")
 
 def job_train():
     """
-    Runs every 1 hour (TEST MODE): Regenerates Data -> Retrains Models -> Logs Drift Metrics
+    Runs every 1 hour (Test Mode): Retrains ALL models and logs their metrics.
     """
-    logger.info("🏋️ Starting Retraining & Drift Check...")
+    logger.info("🏋️ Starting Battle Retraining...")
     
-    # 1. Update Data
     regenerate_training_data()
     
+    try:
+        df = pd.read_csv(TRAINING_CSV).dropna()
+    except:
+        logger.error("❌ No training data found.")
+        return
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     try:
-        # 2. Train Models
-        m1 = NvidiaQuantileModel(target_col='target_price_1d', model_name='model_1d')
-        metrics_1d = m1.train()
+        # 1. Train Champion (Gradient Boosting)
+        champion = NvidiaQuantileModel(target_col='target_price_3d', model_name='model_3d')
+        metrics_gb = champion.train()
+        logger.info(f"🏆 Champion GB: Coverage={metrics_gb['coverage']}, Winkler={metrics_gb['winkler']}")
         
-        m3 = NvidiaQuantileModel(target_col='target_price_3d', model_name='model_3d')
-        metrics_3d = m3.train()
+        # 2. Train Rivals
+        logger.info("⚔️ Training Rival: Linear QR...")
+        metrics_lin = NvidiaLinearQR().train(df)
+        logger.info(f"   Linear QR: Coverage={metrics_lin['coverage']}, Winkler={metrics_lin['winkler']}")
         
-        # 3. Log Performance
-        if metrics_1d and metrics_3d:
-            row = {
-                "timestamp": timestamp,
-                "model_1d_coverage": metrics_1d['coverage'],
-                "model_1d_winkler": metrics_1d['winkler'],
-                "model_1d_loss": metrics_1d['pinball_loss'],
-                "model_3d_coverage": metrics_3d['coverage'],
-                "model_3d_winkler": metrics_3d['winkler'],
-                "model_3d_loss": metrics_3d['pinball_loss']
-            }
+        logger.info("⚔️ Training Rival: MQLSTM...")
+        metrics_lstm = NvidiaMQLSTM().train(df)
+        logger.info(f"   MQLSTM:    Coverage={metrics_lstm['coverage']}, Winkler={metrics_lstm['winkler']}")
+        
+        logger.info("⚔️ Training Rival: QRNN...")
+        metrics_qrnn = NvidiaQRNN_Keras().train(df)
+        logger.info(f"   QRNN:      Coverage={metrics_qrnn['coverage']}, Winkler={metrics_qrnn['winkler']}")
+
+        # 3. Log ALL to CSV
+        with open(METRICS_CSV, "a") as f:
+            # Format: Timestamp, ModelName, Coverage, Winkler
+            f.write(f"{timestamp},GradientBoosting,{metrics_gb['coverage']},{metrics_gb['winkler']}\n")
+            f.write(f"{timestamp},LinearQR,{metrics_lin['coverage']},{metrics_lin['winkler']}\n")
+            f.write(f"{timestamp},MQLSTM,{metrics_lstm['coverage']},{metrics_lstm['winkler']}\n")
+            f.write(f"{timestamp},QRNN,{metrics_qrnn['coverage']},{metrics_qrnn['winkler']}\n")
             
-            df_log = pd.DataFrame([row])
-            write_header = not os.path.isfile(METRICS_CSV)
-            df_log.to_csv(METRICS_CSV, mode='a', header=write_header, index=False)
-            
-            # --- PRINT TO CONSOLE SO YOU SEE IT IMMEDIATELY ---
-            logger.info(f"📊 FRESH METRICS (1D): Coverage={metrics_1d['coverage']}, Winkler={metrics_1d['winkler']}")
-            logger.info(f"📊 FRESH METRICS (3D): Coverage={metrics_3d['coverage']}, Winkler={metrics_3d['winkler']}")
-            logger.info(f"✅ Performance Metrics Logged: {METRICS_CSV}")
-            
+        logger.info(f"✅ All metrics saved to {METRICS_CSV}")
+
     except Exception as e:
         logger.error(f"❌ Training Failed: {e}")
 
@@ -194,15 +217,14 @@ if __name__ == "__main__":
     
     scheduler.start()
     
-    logger.info("✅ High-Frequency Pipeline Running...")
+    logger.info("✅ Multi-Model Pipeline Running...")
     logger.info("   - Inference: Every 10 mins")
-    logger.info("   - Retraining: Every 1 hour (TEST MODE)")
+    logger.info("   - Retraining: Every 1 hour")
     
-    # --- IMMEDIATE STARTUP EXECUTION ---
-    # Run both jobs ONCE right now so we don't have to wait
-    logger.info("⚡ Running initial Training & Inference...")
-    job_train()      # <--- Calculates Metrics NOW
-    job_inference()  # <--- Runs Prediction NOW
+    # Immediate Run
+    logger.info("⚡ Initializing Models...")
+    job_train()
+    job_inference()
     
     try:
         while True: time.sleep(1)
