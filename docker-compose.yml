@@ -1,13 +1,33 @@
+version: '3.8'
 services:
   nvda-pipeline:
     build: .
     container_name: nvda_predictor
     restart: always
-    shm_size: '2gb'  # Critical for Chrome/FinBERT
+    shm_size: '2gb'
     volumes:
       - ./data:/app/data
       - ./models:/app/models
       - ./src/data_collection/cookies:/app/src/data_collection/cookies
       - ./src/data_collection/outputs:/app/src/data_collection/outputs
+      - .:/app
+      # Change this to use /tmp/huggingface
+      - huggingface_cache:/tmp/huggingface
     environment:
       - TZ=UTC
+      - SCWEET_EMAIL=*placeholder*
+      - SCWEET_USERNAME=*placeholder*
+      - SCWEET_PASSWORD=*placeholder*
+      # Add these environment variables
+      - HF_HOME=/tmp/huggingface
+      - TRANSFORMERS_CACHE=/tmp/huggingface
+      - XDG_CACHE_HOME=/tmp
+    # Optional: Add health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  huggingface_cache:
