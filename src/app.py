@@ -52,7 +52,6 @@ with st.sidebar:
     st.divider()
     
     st.subheader("Model Selection")
-    # For the table comparison
     model_options = ["Gradient Boosting", "Linear QR", "MQLSTM", "QRNN"]
     selected_models = st.multiselect("Compare Models", model_options, default=["Gradient Boosting", "MQLSTM"])
     
@@ -75,6 +74,7 @@ if not pred_data or "error" in pred_data:
 meta = pred_data.get('meta', {})
 signals = pred_data.get('signals', {})
 raw_models = pred_data.get('models', {})
+curve = pred_data.get('forecast_curve', {}) # <--- NEW: Read the Curve Data
 technicals = pred_data.get('technicals', {})
 
 # Key Metrics
@@ -113,69 +113,85 @@ with tab1:
     ret_pct = champ_data['return_pred'] * 100
     c4.metric("3-Day Forecast", f"${champ_data['pred']:.2f}", delta=f"{ret_pct:+.2f}%")
 
+    # ==========================================================================
     # 2. HERO CHART: RESEARCH GRAPH (History + Cone)
+    # ==========================================================================
     st.subheader(f"🔮 Strategic Forecast (Champion Model)")
     
-    # Setup History Data
+    fig = go.Figure()
+
+    # A. History (Black Line)
+    last_dt = datetime.datetime.now()
+    last_price = current_price
+
     if history_data:
         df_hist = pd.DataFrame(history_data)
         df_hist['timestamp'] = pd.to_datetime(df_hist['timestamp'])
-        df_chart = df_hist.tail(100) # Last 100 points
-        last_hist_date = df_chart['timestamp'].iloc[-1]
-        last_hist_price = df_chart['price'].iloc[-1]
-    else:
-        df_chart = pd.DataFrame()
-        last_hist_date = datetime.datetime.now()
-        last_hist_price = current_price
-
-    # Setup Forecast Data (Stitched)
-    target_dt = last_hist_date + datetime.timedelta(days=3)
-    x_forecast = [last_hist_date, target_dt]
-    y_median = [last_hist_price, champ_data['pred']]
-    y_upper = [last_hist_price, champ_data['upper']]
-    y_lower = [last_hist_price, champ_data['lower']]
-
-    fig = go.Figure()
-
-    # A. Historical Line
-    if not df_chart.empty:
+        df_chart = df_hist.tail(100) # Show last 100 points
+        
         fig.add_trace(go.Scatter(
             x=df_chart['timestamp'], y=df_chart['price'],
             mode='lines', name='History (30D)',
             line=dict(color='white', width=2), hovertemplate='$%{y:.2f}'
         ))
+        
+        # Capture end point to stitch lines
+        last_dt = df_chart['timestamp'].iloc[-1]
+        last_price = df_chart['price'].iloc[-1]
 
-    # B. The Cone (Upper Transparent + Lower Fill)
+    # B. Forecast Curve Logic
+    # We grab 1d, 2d, 3d predictions from the Curve or fallback to straight line
+    d1 = curve.get("1d", {'pred': last_price})
+    d2 = curve.get("2d", {'pred': last_price})
+    d3 = curve.get("3d", {'pred': last_price}) # This is usually champ_data
+
+    # X-Axis: [Now, T+1, T+2, T+3]
+    dates_future = [
+        last_dt,
+        last_dt + datetime.timedelta(days=1),
+        last_dt + datetime.timedelta(days=2),
+        last_dt + datetime.timedelta(days=3)
+    ]
+
+    # Y-Axis: Median Path (Stitched)
+    y_median = [last_price, d1['pred'], d2['pred'], d3['pred']]
+
+    # Y-Axis: Upper/Lower Cone (Stitched)
+    # Note: If 1d/2d don't have ranges, we interpolate or reuse last known
+    y_up = [last_price, d1.get('upper', last_price), d2.get('upper', last_price), d3.get('upper', last_price)]
+    y_low = [last_price, d1.get('lower', last_price), d2.get('lower', last_price), d3.get('lower', last_price)]
+
+    # C. Plot The Cone (Upper Transparent + Lower Fill)
     fig.add_trace(go.Scatter(
-        x=x_forecast, y=y_upper, mode='lines', line=dict(width=0),
+        x=dates_future, y=y_up, mode='lines', line=dict(width=0),
         showlegend=False, hoverinfo='skip'
     ))
     fig.add_trace(go.Scatter(
-        x=x_forecast, y=y_lower, mode='lines', 
+        x=dates_future, y=y_low, mode='lines', 
         fill='tonexty', fillcolor='rgba(0, 0, 255, 0.15)',
         line=dict(width=0), name='80% Risk Range', hoverinfo='skip'
     ))
 
-    # C. Median Forecast
+    # D. Plot The Median Forecast (Blue Line)
     fig.add_trace(go.Scatter(
-        x=x_forecast, y=y_median, mode='lines+markers',
-        name='Median Forecast', line=dict(color='blue', width=2, dash='dash'),
-        marker=dict(size=8)
+        x=dates_future, y=y_median, mode='lines+markers',
+        name='Forecast Path', line=dict(color='blue', width=2),
+        marker=dict(size=6)
     ))
 
-    # Annotation
+    # Annotation at the end
     fig.add_annotation(
-        x=target_dt, y=champ_data['pred'], text=f"${champ_data['pred']:.2f}",
+        x=dates_future[-1], y=y_median[-1], text=f"${y_median[-1]:.2f}",
         showarrow=True, arrowhead=1, ax=40, ay=0, font=dict(color="blue", size=12)
     )
 
     fig.update_layout(
-        height=500, title="Price Trajectory & Risk Cone",
+        height=500, title="Price Trajectory (Past + Future)",
         hovermode="x unified", xaxis_title="Timeline", yaxis_title="Price ($)",
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
     # Add vertical "Now" line
-    fig.add_vline(x=last_hist_date, line_width=1, line_dash="dot", line_color="gray")
+    fig.add_vline(x=last_dt, line_width=1, line_dash="dot", line_color="gray")
     
     st.plotly_chart(fig, use_container_width=True)
 
@@ -221,8 +237,6 @@ with tab1:
             if isinstance(s_val, dict):
                 wink_fmt = f"{s_val.get('winkler', 0):.2f}"
                 cov_fmt = f"{s_val.get('coverage', 0):.1%}"
-                # Using 'winkler' as the main error score proxy if 'mae' isn't explicitly saved
-                # or use pinball_loss if available
                 err_fmt = f"{s_val.get('pinball_loss', 0):.3f}"
             else:
                 wink_fmt, cov_fmt, err_fmt = "-", "-", "-"
