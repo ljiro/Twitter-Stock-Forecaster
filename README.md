@@ -61,7 +61,7 @@ pip install -r requirements.txt
 
 The pipeline requires three concurrent processes to run continuously.
 
-#Step 1: Start the Orchestrator (Data/ML Backend)
+# Step 1: Start the Orchestrator (Data/ML Backend)
 The orchestrator builds the database, trains the models, and saves the prediction files (data/latest_prediction.json, data/live_predictions.csv).
 
 
@@ -76,7 +76,7 @@ Step 2: Start the API Server
 The API reads the JSON/CSV files created in Step 1 and makes them available to the frontend.
 
 ```
-# Step2: Run FastAPI server
+# Step 2: Run FastAPI server
 ```bash
 
 # Terminal 2: Run the FastAPI server
@@ -85,7 +85,7 @@ uvicorn src/api:app --reload
 Step 3: Launch the User Interface
 The Streamlit app connects to the API and renders the interactive report.
 ```
-# Step3: Run run Streamlit App
+# Step 3: Run run Streamlit App
 ```bash
 
 # Terminal 3: Run the Streamlit app
