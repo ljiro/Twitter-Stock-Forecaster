@@ -3,10 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
 import pandas as pd
+import numpy as np  # <--- CRITICAL IMPORT
 
-app = FastAPI(title="Nvidia Stock Predictor API")
+app = FastAPI(title="Nvidia Market Oracle API")
 
-# Allow frontend to access this
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,7 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# File Paths (Must match main_orchestrator.py)
+# File Paths
 LATEST_PREDICTION_FILE = "data/latest_prediction.json"
 PREDICTIONS_CSV = "data/live_predictions.csv"
 METRICS_CSV = "data/model_performance.csv"
@@ -25,14 +25,11 @@ def home():
 
 @app.get("/predict")
 def get_prediction():
-    """Returns the latest JSON prediction with model details."""
     if not os.path.exists(LATEST_PREDICTION_FILE):
         return {"error": "System initializing. Please wait."}
-    
     try:
         with open(LATEST_PREDICTION_FILE, "r") as f:
-            data = json.load(f)
-        return data
+            return json.load(f)
     except Exception as e:
         return {"error": f"Failed to load prediction: {str(e)}"}
 
@@ -43,25 +40,38 @@ def get_history():
         return []
     
     try:
-        # Read CSV and return as list of dicts (JSON array)
         df = pd.read_csv(PREDICTIONS_CSV)
-        # Limit to last 100 points to keep API fast
-        df = df.tail(100) 
+        
+        if df.empty: return []
+
+        # Limit to last 100 points
+        df = df.tail(100)
+        
+        # --- CRITICAL FIX: SANITIZE DATA ---
+        # 1. Replace Infinite values with NaN
+        df = df.replace([np.inf, -np.inf], np.nan)
+        
+        # 2. Replace NaN with None (which becomes JSON 'null')
+        df = df.where(pd.notnull(df), None)
+        
         return df.to_dict(orient="records")
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"⚠️ API Error reading history: {e}")
+        return []
 
 @app.get("/performance")
 def get_performance_metrics():
-    """Returns the training performance history (Winkler scores)."""
     if not os.path.exists(METRICS_CSV):
         return []
-    
     try:
-        # Returns [timestamp, model_name, coverage, winkler]
         df = pd.read_csv(METRICS_CSV, names=["timestamp", "model", "coverage", "winkler"])
+        
+        # Sanitize metrics too
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.where(pd.notnull(df), None)
+        
         return df.to_dict(orient="records")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Run command: uvicorn src.api:app --reload
+        print(f"⚠️ API Error reading performance: {e}")
+        return []
