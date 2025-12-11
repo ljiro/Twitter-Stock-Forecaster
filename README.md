@@ -49,7 +49,7 @@ You must have Python 3.10+ installed.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/ljiro/Twitter-Stock-Forecaster/.git
+git clone https://github.com/ljiro/Twitter-Stock-Forecaster.git
 cd Twitter-Stock-Forecaster
 
 # 2. Install dependencies
