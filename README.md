@@ -113,4 +113,7 @@ Twitter-Stock-Forecaster/
     └── live_predictions.csv    <-- (History for graph context)
 
 ```
+# Application preview 
+<img width="1920" height="911" alt="image" src="https://github.com/user-attachments/assets/4dcc98d0-27cf-4521-9918-8c603e72dda0" />
+<img width="1918" height="912" alt="image" src="https://github.com/user-attachments/assets/028a0514-c807-44ae-9127-bf97ba80f7ad" />
 
